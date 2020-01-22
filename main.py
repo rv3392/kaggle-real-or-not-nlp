@@ -14,9 +14,6 @@ def load_data():
     return train, test
 
 def preprocess(train_dataframe, test_dataframe):
-    train_dataframe = train_dataframe.sample(frac=1).reset_index(drop=True)
-    test_dataframe = test_dataframe.sample(frac=1).reset_index(drop=True)
-
     vectorizer = feature_extraction.text.CountVectorizer()
     scaler = preprocessing.MinMaxScaler(feature_range = (0,1))
 
@@ -44,15 +41,15 @@ def train(data, targets):
     print(data.shape)
     print(targets.shape)
 
-    optimiser = optimizers.Adam(lr = 0.001, decay = 0.01)
+    optimiser = optimizers.Adam(lr = 0.00001)
     training_model = models.Sequential()
 
-    training_model.add(layers.LSTM(4, input_shape = (1, data.shape[2])))
-    training_model.add(layers.Dense(1))
+    training_model.add(layers.LSTM(16, input_shape = (1, data.shape[2])))
+    training_model.add(layers.Dense(1, activation = 'linear'))
     training_model.compile(loss = 'mean_squared_error', optimizer = optimiser, metrics = ['accuracy'])
 
-    training_history = training_model.fit(data, targets, epochs = 10, 
-            validation_split = 0.2, batch_size = 20, shuffle = False)
+    training_history = training_model.fit(data, targets, epochs = 50, 
+            validation_split = 0.1, batch_size = 5)
 
     return training_model, training_history
 
@@ -69,6 +66,10 @@ def plot_diagnostics(history):
     pyplot.show()
 
 train_dataframe, test_dataframe = load_data()
+
+train_dataframe = train_dataframe.sample(frac=1).reset_index(drop=True)
+test_dataframe = test_dataframe.sample(frac=1).reset_index(drop=True)
+
 train_matrix, test_matrix = preprocess(train_dataframe, test_dataframe)
 
 model, training_history = train(train_matrix, numpy.asmatrix(train_dataframe['target']))
