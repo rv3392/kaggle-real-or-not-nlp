@@ -4,6 +4,9 @@ from sklearn import feature_extraction, model_selection, preprocessing
 from keras import models, layers, optimizers
 from matplotlib import pyplot
 
+import string
+import re
+
 TRAINING_DATA = "train.csv"
 TESTING_DATA = "test.csv"
 
@@ -17,12 +20,42 @@ def preprocess(train_dataframe, test_dataframe):
     vectorizer = feature_extraction.text.CountVectorizer()
     scaler = preprocessing.MinMaxScaler(feature_range = (0,1))
 
-    #Convert text to a word count vector.
-    train_matrix = vectorizer.fit_transform(train_dataframe['text'])
-    test_matrix = vectorizer.transform(test_dataframe['text'])
+    train_dataframe['text'] = train_dataframe['text'].apply(lambda text: str(text).lower())
+    test_dataframe['text'] = test_dataframe['text'].apply(lambda text: str(text).lower())
 
-    train_matrix = train_matrix.todense()
-    test_matrix = test_matrix.todense()
+    print(train_dataframe['location'])
+
+    train_dataframe['location'] = train_dataframe['location'].apply(lambda text: str(text).lower())
+    test_dataframe['location'] = test_dataframe['location'].apply(lambda text: str(text).lower())
+
+    print(train_dataframe)
+
+    train_dataframe['text'] = train_dataframe['text'].str.replace(
+            '[{}]'.format(string.punctuation),'')
+
+    test_dataframe['text'] = test_dataframe['text'].str.replace(
+            '[{}]'.format(string.punctuation),'')
+
+    train_dataframe['location'] = train_dataframe['location'].str.replace(
+            '[{}]'.format(string.punctuation),'')
+
+    test_dataframe['location'] = test_dataframe['location'].str.replace(
+            '[{}]'.format(string.punctuation),'')
+
+    print(train_dataframe)
+
+    #Convert text to a word count vector.
+    train_matrix_text = vectorizer.fit_transform(train_dataframe['text'])
+    test_matrix_text = vectorizer.transform(test_dataframe['text'])
+
+    train_matrix_location = vectorizer.fit_transform(train_dataframe['location'])
+    test_matrix_location = vectorizer.transform(test_dataframe['location'])
+
+    train_matrix = numpy.concatenate((train_matrix_text.todense(), train_matrix_location.todense()), axis = 1)
+    test_matrix = numpy.concatenate((test_matrix_text.todense(), test_matrix_location.todense()), axis = 1)
+
+    print(train_matrix.shape)
+    print(test_matrix.shape)
 
     #Normalise word counts to between 0 and 1 where 0 means none of the words
     #in the tweet are the given word and 1 means all words in the tweet are
@@ -44,12 +77,14 @@ def train(data, targets):
     optimiser = optimizers.Adam(lr = 0.00001)
     training_model = models.Sequential()
 
-    training_model.add(layers.LSTM(16, input_shape = (1, data.shape[2])))
+    training_model.add(layers.LSTM(128, input_shape = (1, data.shape[2]), 
+            return_sequences = True))
+    training_model.add(layers.LSTM(64))
     training_model.add(layers.Dense(1, activation = 'linear'))
     training_model.compile(loss = 'mean_squared_error', optimizer = optimiser, metrics = ['accuracy'])
 
-    training_history = training_model.fit(data, targets, epochs = 50, 
-            validation_split = 0.1, batch_size = 5)
+    training_history = training_model.fit(data, targets, epochs = 10, 
+            validation_split = 0.1, batch_size = 10)
 
     return training_model, training_history
 
