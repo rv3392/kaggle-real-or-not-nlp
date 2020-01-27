@@ -10,18 +10,27 @@ import re
 TRAINING_DATA = "train.csv"
 TESTING_DATA = "test.csv"
 
+EPOCHS = 5
+
 def load_data():
     train = pandas.read_csv(TRAINING_DATA)
     test = pandas.read_csv(TESTING_DATA)
 
     return train, test
 
+def remove_url(text):
+        url_pattern = re.compile(r'https?://\S+|www\.\S+')
+        return re.sub(url_pattern, '', text)
+
 def preprocess(train_dataframe, test_dataframe):
-    vectorizer = feature_extraction.text.CountVectorizer()
+    vectorizer = feature_extraction.text.TfidfVectorizer()
     scaler = preprocessing.MinMaxScaler(feature_range = (0,1))
 
     train_dataframe['text'] = train_dataframe['text'].apply(lambda text: str(text).lower())
     test_dataframe['text'] = test_dataframe['text'].apply(lambda text: str(text).lower())
+
+    train_dataframe['text'] = train_dataframe['text'].apply(lambda text: remove_url(text))
+    test_dataframe['text'] = test_dataframe['text'].apply(lambda text: remove_url(text))
 
     print(train_dataframe['location'])
 
@@ -42,20 +51,20 @@ def preprocess(train_dataframe, test_dataframe):
     test_dataframe['location'] = test_dataframe['location'].str.replace(
             '[{}]'.format(string.punctuation),'')
 
-    print(train_dataframe)
-
     #Convert text to a word count vector.
     train_matrix_text = vectorizer.fit_transform(train_dataframe['text'])
     test_matrix_text = vectorizer.transform(test_dataframe['text'])
 
-    train_matrix_location = vectorizer.fit_transform(train_dataframe['location'])
-    test_matrix_location = vectorizer.transform(test_dataframe['location'])
+    #train_matrix_location = vectorizer.fit_transform(train_dataframe['location'])
+    #test_matrix_location = vectorizer.transform(test_dataframe['location'])
 
-    train_matrix = numpy.concatenate((train_matrix_text.todense(), train_matrix_location.todense()), axis = 1)
-    test_matrix = numpy.concatenate((test_matrix_text.todense(), test_matrix_location.todense()), axis = 1)
+    print(vectorizer.vocabulary_)
 
-    print(train_matrix.shape)
-    print(test_matrix.shape)
+    train_matrix = train_matrix_text.todense() #numpy.concatenate((train_matrix_text.todense(), train_matrix_location.todense()), axis = 1)
+    test_matrix = train_matrix_text.todense() #numpy.concatenate((test_matrix_text.todense(), test_matrix_location.todense()), axis = 1)
+
+    test_out = train_matrix.sum(axis=0).tolist()[0]
+    test_out.sort(reverse = True)
 
     #Normalise word counts to between 0 and 1 where 0 means none of the words
     #in the tweet are the given word and 1 means all words in the tweet are
@@ -74,22 +83,26 @@ def train(data, targets):
     print(data.shape)
     print(targets.shape)
 
-    optimiser = optimizers.Adam(lr = 0.00001)
+    optimiser = optimizers.Adam()
     training_model = models.Sequential()
 
-    training_model.add(layers.LSTM(128, input_shape = (1, data.shape[2]), 
-            return_sequences = True))
-    training_model.add(layers.LSTM(64))
-    training_model.add(layers.Dense(1, activation = 'linear'))
-    training_model.compile(loss = 'mean_squared_error', optimizer = optimiser, metrics = ['accuracy'])
+    training_model.add(layers.LSTM(128, return_sequences = True))
+    training_model.add(layers.LSTM(128))
+    training_model.add(layers.Dense(256, activation = 'relu'))
+    training_model.add(layers.Dense(256, activation = 'relu'))
+    training_model.add(layers.Dense(1, activation = 'sigmoid'))
+    training_model.compile(loss = 'binary_crossentropy', optimizer = optimiser, 
+            metrics = ['accuracy'])
 
-    training_history = training_model.fit(data, targets, epochs = 10, 
-            validation_split = 0.1, batch_size = 10)
+    training_history = training_model.fit(data, targets, epochs = EPOCHS, 
+            validation_split = 0.2, batch_size = 512)
 
     return training_model, training_history
 
-def test():
-    pass
+def test(training_model, test_matrix):
+    test_matrix = test_matrix[:, numpy.newaxis, :]
+
+    return training_model.predict(test_matrix)
 
 def plot_diagnostics(history):
     pyplot.plot(history.history['loss'])
@@ -109,6 +122,12 @@ train_matrix, test_matrix = preprocess(train_dataframe, test_dataframe)
 
 model, training_history = train(train_matrix, numpy.asmatrix(train_dataframe['target']))
 plot_diagnostics(training_history)
+
+results = test(model, test_matrix)
+
+sample = pandas.read_csv("sample_submission.csv")
+sample['target'] = results
+sample.to_csv("submission.csv", index = False)
 
 
 
