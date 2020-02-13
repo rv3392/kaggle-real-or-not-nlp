@@ -4,7 +4,7 @@ import string
 import utils
 from sklearn import feature_extraction, preprocessing
 
-def preprocess(data, vectorizer, scaler, reset_word_bag= False):
+def preprocess(data, vectorizer, scaler, reset_word_bag=False):
     data = clean_text(data)
     data = vectorize_text(vectorizer, data, reset_word_bag)
     data = data.todense()
